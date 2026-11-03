@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Калькулятор закупки трофеев</title>
+<style>
+:root{
+  --bg:#14161b;--panel:#1d2027;--panel2:#252932;--line:#323744;--text:#e8eaf0;--muted:#8b92a3;
+  --good:#4ade80;--bad:#f87171;--accent:#fbbf24;
+}
+@media (prefers-color-scheme: light){
+  :root{--bg:#f3f4f7;--panel:#fff;--panel2:#eceef3;--line:#d5d9e2;--text:#1c1f26;--muted:#667085;--good:#16a34a;--bad:#dc2626;--accent:#b45309}
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px 16px 130px}
+.toolbar{margin:0 auto 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.toolbar label{color:var(--muted);font-size:13px}
+select,button,input{font:inherit;color:inherit}
+select,.btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer}
+.btn:hover,select:hover{border-color:var(--muted)}
+.spacer{flex:1}
+.grid{margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;position:relative}
+.card.off{opacity:.45}
+.card.hidden{display:none}
+.ico.sm{width:30px;height:30px;font-size:14px;border-radius:6px}
+.grid{align-items:start}
+.opt{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text)!important;font-size:14px!important}
+.opt input{accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
+.card.best{border-color:var(--good)}
+.head{display:flex;gap:10px;align-items:center}
+.icons{display:flex;gap:4px;flex:none}
+.ico{width:44px;height:44px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);object-fit:contain;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--muted);font-size:18px}
+.title{font-weight:600;line-height:1.25;flex:1;min-width:0}
+.meta{color:var(--muted);font-size:12px}
+.chk{position:absolute;top:8px;right:8px;width:18px;height:18px;accent-color:var(--accent);cursor:pointer}
+.head{padding-right:22px}
+.row{display:flex;align-items:center;gap:8px}
+.row .lbl{flex:1;font-size:13px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.price{width:110px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;text-align:right}
+.price:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.res{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--line);padding-top:8px}
+.res .cost{color:var(--muted);font-size:12px}
+.profit{font-weight:700;font-size:17px}
+.pos{color:var(--good)}.neg{color:var(--bad)}.none{color:var(--muted)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));z-index:5}
+.bar-in{margin:0 auto;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column}
+.stat small{color:var(--muted);font-size:12px}
+.stat b{font-size:16px}
+.stat.big b{font-size:24px}
+.chars{display:flex;align-items:center;gap:6px}
+.chars button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:18px;line-height:1}
+.chars span{min-width:24px;text-align:center;font-weight:700}
+.note{color:var(--muted);font-size:12px}
+@media(max-width:560px){.grid{grid-template-columns:1fr 1fr}.price{width:90px}.stat.big b{font-size:20px}.bar-in{gap:12px}}
+@media(max-width:420px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <label for="sort">Сортировка:</label>
+  <select id="sort">
+    <option value="profit">По чистой прибыли</option>
+    <option value="roi">По окупаемости (%)</option>
+    <option value="reward">По награде</option>
+    <option value="cost">По стоимости закупки</option>
+    <option value="name">По названию</option>
+    <option value="default">Как в игре</option>
+  </select>
+  <button class="btn" id="dir" title="Направление сортировки">↓</button>
+  <label class="opt"><input type="checkbox" id="hideOff"> Не отображать скрытые трофеи</label>
+  <span class="spacer"></span>
+  <button class="btn" id="reset">Сбросить цены</button>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="bar">
+  <div class="bar-in">
+    <div class="stat"><small>Персонажей</small>
+      <div class="chars"><button id="cm">−</button><span id="cn">1</span><button id="cp">+</button></div>
+    </div>
+    <div class="stat"><small>Затраты</small><b id="tCost">0</b></div>
+    <div class="stat"><small>Награда</small><b id="tReward">0</b></div>
+    <div class="stat big"><small>Чистая прибыль</small><b id="tProfit">0</b></div>
+    <div class="stat"><small>На 1 персонажа</small><b id="tOne">0</b></div>
+    <div class="note" id="tNote"></div>
+  </div>
+</div>
+
+<script>
+// ---------- Данные ----------
+// id — имя файла иконки: icons/<id>.png (если файла нет, показывается буква)
+const T = (id, name, qty, reward) => ({ id, reward, parts: [{ id, name, qty }] });
+const TASKS = [
+  T('moroshka',        'Обыканская морошка',      5, 48750),
+  T('zelenorost',      'Зеленорост',              9, 48750),
+  T('slyuna-valder',   'Слюна вальдерстая',      10, 55994),
+  T('dogovor-ostin',   'Договор с Остином',      10, 59978),
+  T('oshejnik-valder', 'Ошейник вальдерстая',    10, 64089),
+  T('habul-korund',    'Хабульский корунд',       7, 48750),
+  T('rojkin-glaz',     'Ройкин глаз',             6, 48750),
+  T('tolstocvet',      'Толстоцвет',              8, 48750),
+  T('pristrel-monokulyar','Пристрелочный монокуляр',8, 59978),
+  { id: 'lupus', title: 'Шкуры люпусов', reward: 59978, parts: [
+      { id: 'shkura-golodnogo-lupusa', name: 'Шкура голодного люпуса', short: 'Голодного', qty: 4 },
+      { id: 'shkura-svirepogo-lupusa', name: 'Шкура свирепого люпуса', short: 'Свирепого', qty: 4 } ] },
+  T('ledovy-serpantin','Ледовый серпантин',       6, 48750),
+  T('tverdy-splav',    'Твёрдый сплав',          10, 64089),
+  T('zvezdnaya-ruda',  'Звёздная руда',           9, 48750),
+  T('chernaya-ikra',   'Чёрная икра',            16, 59978),
+  T('chelyust-krylozub','Челюсть крылозуба',     40, 59978),
+  T('magnievaya-ruda', 'Магниевая руда',          5, 48750),
+  T('peschernaya-sol', 'Пещерная соль',          10, 64089),
+  T('alfa-bur',        'Альфа-бур',              15, 64089),
+  T('pancir-snegobeya','Панцирь снегобея',       20, 68522),
+  T('yadovitoe-pero',  'Ядовитое перо',          25, 68522),
+  T('zakruchenny-rog', 'Закрученный рог',        30, 68522),
+  T('stlanik',         'Стланик',                 7, 48750),
+  T('myaso-zhuzhi',    'Мясо снежной жужи',      10, 64089),
+  T('pancir-zhuzhi',   'Панцирь северной жужи',   8, 52315),
+  T('golova-snegobeya','Голова снегобея',        15, 55994),
+  T('hvostik-rojki',   'Хвостик ройки',          25, 52315),
+  T('shkura-valder',   'Шкура вальдерстая',      10, 55994),
+  T('seryj-pesok',     'Серый песок',            18, 59978),
+  T('kopyto',          'Копыто',                 14, 64089),
+  T('regulyator-snegobeya','Регулятор снегобея', 14, 59978),
+  T('krasivoe-pero',   'Красивое перо',          25, 64089),
+  T('buben',           'Бубен',                   8, 64089),
+  T('rogovoj-ship',    'Роговой шип',            16, 64089),
+  T('indeven',         'Индевень',               25, 59978),
+  T('bomba',           'Заклинившая бомба',      15, 64089),
+  T('zhguchee-shchupalce','Жгучее щупальце',     16, 59978),
+  T('kuchka-pyli',     'Кучка старой пыли',      20, 64089),
+];
+
+// ---------- Состояние ----------
+const KEY = 'trophy-calc-v1';
+let S = { prices: {}, off: {}, chars: 1, sort: 'profit', desc: true, hideOff: false };
+try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+const fmt = n => Math.round(n).toLocaleString('ru-RU').replace(/\u00a0/g, ' ');
+const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
+const $ = id => document.getElementById(id);
+
+// ---------- Расчёт ----------
+function calc(t) {
+  let cost = 0, complete = true;
+  for (const p of t.parts) {
+    const pr = S.prices[p.id];
+    if (!(pr > 0)) { complete = false; continue; }
+    cost += pr * p.qty;
+  }
+  if (!complete) return { complete, cost: null, profit: null, roi: null };
+  const profit = t.reward - cost;
+  return { complete, cost, profit, roi: profit / cost };
+}
+
+// ---------- Отрисовка ----------
+const els = {}; // id задания -> {card, ...}
+
+function iconEl(p) {
+  const img = new Image();
+  img.className = 'ico'; img.alt = ''; img.title = p.name;
+  img.src = 'icons/' + p.id + '.png';
+  img.onerror = () => {
+    const d = document.createElement('div');
+    d.className = img.className; d.title = p.name; d.textContent = p.name[0];
+    img.replaceWith(d);
+  };
+  return img;
+}
+
+function build() {
+  const grid = $('grid');
+  for (const t of TASKS) {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const chk = document.createElement('input');
+    chk.type = 'checkbox'; chk.className = 'chk'; chk.checked = !S.off[t.id];
+    chk.title = 'Учитывать в итоге';
+    chk.onchange = () => { S.off[t.id] = !chk.checked; if (chk.checked) delete S.off[t.id]; save(); update(); };
+
+    const head = document.createElement('div'); head.className = 'head';
+    const icons = document.createElement('div'); icons.className = 'icons';
+    const multi = t.parts.length > 1;
+    if (!multi) icons.appendChild(iconEl(t.parts[0]));
+    const tt = document.createElement('div');
+    tt.innerHTML = '<div class="title"></div><div class="meta"></div>';
+    tt.firstChild.textContent = t.title || t.parts[0].name;
+    tt.lastChild.textContent = 'Награда: ' + fmt(t.reward);
+    if (!multi) head.append(icons);
+    head.append(tt);
+
+    card.append(chk, head);
+
+    const inputs = [];
+    for (const p of t.parts) {
+      const row = document.createElement('div'); row.className = 'row';
+      const lbl = document.createElement('span'); lbl.className = 'lbl';
+      lbl.textContent = (multi ? p.short + ' ' : '') + '× ' + p.qty;
+      lbl.title = p.name;
+      const inp = document.createElement('input');
+      inp.className = 'price'; inp.inputMode = 'numeric'; inp.placeholder = 'цена за 1';
+      inp.value = S.prices[p.id] ? fmt(S.prices[p.id]) : '';
+      inp.oninput = () => {
+        const v = parseInt(inp.value.replace(/\D/g, ''), 10);
+        if (v > 0) S.prices[p.id] = v; else delete S.prices[p.id];
+        save(); update(false);
+      };
+      inp.onfocus = () => inp.select();
+      inp.onchange = () => { inp.value = S.prices[p.id] ? fmt(S.prices[p.id]) : ''; update(true); };
+      inp.onkeydown = e => { if (e.key === 'Enter') inp.blur(); };
+      if (multi) { const ic = iconEl(p); ic.classList.add('sm'); row.append(ic); }
+      row.append(lbl, inp);
+      card.appendChild(row);
+      inputs.push([p, inp]);
+    }
+
+    const res = document.createElement('div'); res.className = 'res';
+    const cost = document.createElement('span'); cost.className = 'cost';
+    const profit = document.createElement('span'); profit.className = 'profit';
+    res.append(cost, profit);
+    card.appendChild(res);
+
+    els[t.id] = { card, cost, profit, chk, inputs };
+    grid.appendChild(card);
+  }
+}
+
+function sortedTasks() {
+  const rows = TASKS.map((t, i) => ({ t, i, c: calc(t) }));
+  if (S.sort === 'default') return S.desc ? rows : rows.reverse();
+  const key = {
+    profit: r => r.c.profit, roi: r => r.c.roi, cost: r => r.c.cost,
+    reward: r => r.t.reward, name: r => r.t.parts[0].name
+  }[S.sort];
+  const dirMul = S.desc ? -1 : 1;
+  const needsPrice = ['profit', 'roi', 'cost'].includes(S.sort);
+  rows.sort((a, b) => {
+    if (needsPrice && a.c.complete !== b.c.complete) return a.c.complete ? -1 : 1; // без цены — в конец
+    const x = key(a), y = key(b);
+    if (x == null && y == null) return a.i - b.i;
+    let r = typeof x === 'string' ? x.localeCompare(y, 'ru') : x - y;
+    // для стоимости "по убыванию" логичнее показывать сначала дешёвые — оставляем как есть, направление переключается кнопкой
+    return r * dirMul || a.i - b.i;
+  });
+  return rows;
+}
+
+function update(reorder = true) {
+  let sumCost = 0, sumReward = 0, counted = 0, filled = 0;
+  const rows = sortedTasks();
+  let bestId = null;
+  for (const r of rows) {
+    const e = els[r.t.id];
+    e.card.classList.toggle('off', !e.chk.checked);
+    e.card.classList.toggle('hidden', S.hideOff && !e.chk.checked);
+    if (r.c.complete) {
+      filled++;
+      e.cost.textContent = 'Закупка: ' + fmt(r.c.cost) + ' (' + (r.c.roi * 100).toFixed(0) + '%)';
+      e.profit.textContent = signed(r.c.profit);
+      e.profit.className = 'profit ' + (r.c.profit >= 0 ? 'pos' : 'neg');
+      if (e.chk.checked) { sumCost += r.c.cost; sumReward += r.t.reward; counted++; }
+      if (bestId === null && e.chk.checked && r.c.profit > 0 && S.sort === 'profit' && S.desc) bestId = r.t.id;
+    } else {
+      e.cost.textContent = 'Введите цену';
+      e.profit.textContent = '—';
+      e.profit.className = 'profit none';
+    }
+  }
+  for (const t of TASKS) els[t.id].card.classList.toggle('best', t.id === bestId);
+
+  if (reorder) {
+    const grid = $('grid');
+    rows.forEach(r => grid.appendChild(els[r.t.id].card));
+  }
+
+  const n = S.chars;
+  const one = sumReward - sumCost;
+  $('tCost').textContent = fmt(sumCost * n);
+  $('tReward').textContent = fmt(sumReward * n);
+  const tp = $('tProfit');
+  tp.textContent = signed(one * n);
+  tp.className = one > 0 ? 'pos' : one < 0 ? 'neg' : '';
+  $('tOne').textContent = signed(one);
+  $('tNote').textContent = 'Учтено заданий: ' + counted + ' из ' + TASKS.length;
+  $('cn').textContent = n;
+  $('dir').textContent = S.desc ? '↓' : '↑';
+  $('sort').value = S.sort;
+}
+
+// ---------- События ----------
+$('sort').onchange = e => { S.sort = e.target.value; S.desc = true; save(); update(); };
+$('dir').onclick = () => { S.desc = !S.desc; save(); update(); };
+$('cm').onclick = () => { S.chars = Math.max(1, S.chars - 1); save(); update(false); };
+$('cp').onclick = () => { S.chars = Math.min(99, S.chars + 1); save(); update(false); };
+$('reset').onclick = () => {
+  if (!confirm('Сбросить все введённые цены?')) return;
+  S.prices = {};
+  for (const t of TASKS) els[t.id].inputs.forEach(([p, inp]) => inp.value = '');
+  save(); update();
+};
+
+$('hideOff').checked = !!S.hideOff;
+$('hideOff').onchange = e => { S.hideOff = e.target.checked; save(); update(false); };
+
+build();
+update();
+</script>
+</body>
+</html>
